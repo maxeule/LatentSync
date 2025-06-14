@@ -14,17 +14,37 @@ from urllib.parse import urlparse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import LatentSync components
+# Import LatentSync components - Updated for newer versions
 import sys
 sys.path.append('/app')
+
+try:
+    # Try newer import structure first
+    from diffusers import AutoencoderKL, DDIMScheduler
+    from diffusers.schedulers import PNDMScheduler
+    
+    # Import video processing
+    import decord
+    decord.bridge.set_bridge('torch')
+    
+    # Additional optimizations if available
+    try:
+        from DeepCache import DeepCacheSD
+        DEEPCACHE_AVAILABLE = True
+    except ImportError:
+        DEEPCACHE_AVAILABLE = False
+        logger.info("DeepCache not available, using standard inference")
+    
+except ImportError as e:
+    logger.error(f"Import error: {e}")
+    # Fallback imports for compatibility
+    pass
 
 from src.models.unet import UNet3DConditionModel
 from src.models.whisper import whisper
 from src.pipelines.latentsync_pipeline import LatentSyncPipeline
 from src.utils.config import load_config
 from src.utils.utils import tensor2video
-from diffusers import AutoencoderKL
-from diffusers.schedulers import PNDMScheduler
 import cv2
 import numpy as np
 
@@ -101,7 +121,7 @@ def initialize_models():
     # Initialize models
     vae = AutoencoderKL.from_pretrained(
         "stabilityai/sd-vae-ft-mse",
-        torch_dtype=torch.float16
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
     ).to(device)
     
     # Load Whisper model
@@ -121,7 +141,7 @@ def initialize_models():
     else:
         logger.warning("UNet checkpoint not found!")
     
-    unet = unet.to(device, dtype=torch.float16)
+    unet = unet.to(device, dtype=torch.float16 if torch.cuda.is_available() else torch.float32)
     
     # Initialize scheduler
     scheduler = PNDMScheduler(
@@ -149,14 +169,24 @@ def process_video_with_latentsync(video_path, audio_path, inference_steps=30, gu
     try:
         pipeline = initialize_models()
         
-        # Read video
-        cap = cv2.VideoCapture(video_path)
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
-        logger.info(f"Video info: {width}x{height} @ {fps}fps, {total_frames} frames")
+        # Try to use decord for better performance
+        try:
+            from decord import VideoReader
+            vr = VideoReader(video_path)
+            fps = vr.get_avg_fps()
+            total_frames = len(vr)
+            width, height = vr[0].shape[1], vr[0].shape[0]
+            logger.info(f"Using decord - Video info: {width}x{height} @ {fps}fps, {total_frames} frames")
+            use_decord = True
+        except:
+            # Fallback to OpenCV
+            cap = cv2.VideoCapture(video_path)
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            logger.info(f"Using OpenCV - Video info: {width}x{height} @ {fps}fps, {total_frames} frames")
+            use_decord = False
         
         # Prepare output video
         output_path = video_path.replace('.mp4', '_synced.mp4')
@@ -171,16 +201,27 @@ def process_video_with_latentsync(video_path, audio_path, inference_steps=30, gu
             
             # Read frames
             frames = []
-            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
             
-            for _ in range(end_frame - start_frame):
-                ret, frame = cap.read()
-                if not ret:
-                    break
+            if use_decord:
+                # Use decord for frame reading
+                frame_indices = list(range(start_frame, end_frame))
+                batch_frames = vr.get_batch(frame_indices).asnumpy()
+                for frame in batch_frames:
+                    # Resize to 512x512 (LatentSync 1.6 resolution)
+                    frame = cv2.resize(frame, (512, 512))
+                    frames.append(frame)
+            else:
+                # Use OpenCV
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
                 
-                # Resize to 512x512 (LatentSync 1.6 resolution)
-                frame = cv2.resize(frame, (512, 512))
-                frames.append(frame)
+                for _ in range(end_frame - start_frame):
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    
+                    # Resize to 512x512 (LatentSync 1.6 resolution)
+                    frame = cv2.resize(frame, (512, 512))
+                    frames.append(frame)
             
             if len(frames) == 0:
                 break
@@ -210,7 +251,8 @@ def process_video_with_latentsync(video_path, audio_path, inference_steps=30, gu
             logger.info(f"Processed frames {start_frame} to {end_frame}")
         
         # Clean up
-        cap.release()
+        if not use_decord:
+            cap.release()
         out.release()
         
         # Add audio to output video
