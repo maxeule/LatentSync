@@ -2,7 +2,7 @@ import os, runpod, torch, tempfile, subprocess
 from latentsync.pipelines.lipsync_pipeline import LipsyncPipeline
 
 # 1) Modell nur EINMAL laden (außerhalb des Handlers)
-pipe = LatentSyncPipeline.from_pretrained(
+pipe = LipsyncPipeline.from_pretrained(
     "ByteDance/LatentSync-1.6",
     torch_dtype=torch.float16
 ).to("cuda")
