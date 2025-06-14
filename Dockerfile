@@ -1,5 +1,5 @@
-# Use NVIDIA CUDA base image with Python
-FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+# Use NVIDIA CUDA base image with Python - Updated for CUDA 12.1
+FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -37,39 +37,14 @@ RUN git clone https://github.com/bytedance/LatentSync.git . && \
 # Install Python dependencies
 RUN python3 -m pip install --upgrade pip setuptools wheel
 
-# Install PyTorch with CUDA support
-RUN pip3 install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+# Copy requirements file first (for better Docker caching)
+COPY requirements.txt /app/requirements.txt
 
-# Install core dependencies
-RUN pip3 install \
-    diffusers==0.21.4 \
-    transformers==4.35.2 \
-    accelerate==0.24.1 \
-    opencv-python==4.8.1.78 \
-    pillow==10.1.0 \
-    numpy==1.24.3 \
-    scipy==1.11.4 \
-    matplotlib==3.8.1 \
-    tqdm==4.66.1 \
-    omegaconf==2.3.0 \
-    einops==0.7.0 \
-    imageio[ffmpeg]==2.33.0 \
-    av==11.0.0 \
-    runpod==1.6.0
+# Install PyTorch with CUDA 12.1 support
+RUN pip3 install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
 
-# Install additional dependencies for LatentSync
-RUN pip3 install \
-    face-alignment==1.3.5 \
-    dlib==19.24.2 \
-    mediapipe==0.10.8 \
-    librosa==0.10.1 \
-    soundfile==0.12.1 \
-    pydub==0.25.1 \
-    webrtcvad==2.0.10 \
-    praat-parselmouth==0.4.3
-
-# Install Whisper
-RUN pip3 install openai-whisper==20230918
+# Install all other dependencies from requirements.txt
+RUN pip3 install -r requirements.txt
 
 # Create necessary directories
 RUN mkdir -p /app/checkpoints/whisper \
