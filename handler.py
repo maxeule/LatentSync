@@ -1,5 +1,5 @@
 import os, runpod, torch, tempfile, subprocess
-from latentsync.pipelines.lipsync_pipeline import LatentSyncPipeline
+from latentsync.pipelines.lipsync_pipeline import LipsyncPipeline
 
 # 1) Modell nur EINMAL laden (außerhalb des Handlers)
 pipe = LatentSyncPipeline.from_pretrained(
@@ -30,11 +30,11 @@ def handler(job):
 
         out_mp4 = os.path.join(tmp, "out.mp4")
         pipe(
-            vid,
-            aud,
+            video_path=vid,
+            audio_path=aud,
+            video_out_path=out_mp4,
             num_inference_steps=inp.get("steps", 25),
             guidance_scale=inp.get("guidance", 2.0),
-            output_path=out_mp4
         )
         # Runpod lädt die Datei hoch und gibt eine https-URL zurück
         return runpod.serverless.upload_file(out_mp4)
