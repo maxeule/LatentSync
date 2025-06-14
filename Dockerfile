@@ -2,7 +2,8 @@ FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
 
 # System-Pakete
 RUN apt-get update && \
-    apt-get install -y ffmpeg curl && \
+    apt-get install -y --no-install-recommends \
+        ffmpeg curl git build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 # Arbeits­verzeichnis
