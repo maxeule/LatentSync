@@ -1,3 +1,6 @@
+# 0. Non-interactive Mode für apt (verhindert tzdata-Prompts)
+ENV DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC
+
 # 1. CUDA-fähiges Basis-Image (enthält libnvrtc.so.12 & CUDA Runtime)
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu20.04
 
