@@ -1,15 +1,17 @@
 # 1. CUDA-fähiges Basis-Image (enthält libnvrtc.so.12 & CUDA Runtime)
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu20.04
 
-# 2. Non-interactive Mode für apt (verhindert tzdata-Prompts)
+# 2. Non-interactive Mode für apt
 ENV DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC
 
 # 3. Arbeitsverzeichnis
 WORKDIR /app
 
-# 4. System-Pakete installieren
+# 4. System-Pakete installieren (inkl. python3 & pip)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+      python3 \
+      python3-pip \
       build-essential \
       ffmpeg \
       libgl1 \
@@ -18,11 +20,14 @@ RUN apt-get update && \
 
 # 5. Python-Abhängigkeiten installieren
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
- && pip install --no-cache-dir runpod>=1.7.9 huggingface-hub onnxruntime-gpu
+RUN python3 -m pip install --no-cache-dir -r requirements.txt && \
+    python3 -m pip install --no-cache-dir \
+      runpod>=1.7.9 \
+      huggingface-hub \
+      onnxruntime-gpu
 
 # 6. LatentSync-1.6 Checkpoints herunterladen
-RUN huggingface-cli download ByteDance/LatentSync-1.6 \
+RUN python3 -m huggingface_cli download ByteDance/LatentSync-1.6 \
       --local-dir /app/checkpoints \
       --exclude "*.git*" "README.md"
 
@@ -43,4 +48,4 @@ RUN ln -s /app/configs/unet/stage2_efficient.yaml \
           /app/configs/unet/second_stage.yaml
 
 # 10. Serverless Handler starten
-CMD ["python", "-u", "handler.py"]
+CMD ["python3", "-u", "handler.py"]
