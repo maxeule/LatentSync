@@ -24,4 +24,4 @@ kornia==0.8.0
 insightface==0.7.3
 onnxruntime-gpu==1.21.0
 DeepCache==0.1.1
-runpod
+runpod==1.7.11
